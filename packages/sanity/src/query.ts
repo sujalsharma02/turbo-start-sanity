@@ -214,6 +214,31 @@ export const queryAllBlogDataForSearch = defineQuery(`
   }
 `);
 
+// One record shape for the Algolia index: the card fields plus a flat author
+// name (a searchable attribute must be top-level) and the two visibility flags
+// the sync route decides on. Kept next to queryAllBlogDataForSearch, which the
+// Markdown route still uses.
+const searchRecordProjection = /* groq */ `
+  ${blogCardFragment},
+  "authorName": authors[0]->name,
+  seoHideFromLists,
+  seoNoIndex
+`;
+
+/** By id and without a visibility filter: the caller decides upsert vs delete. */
+export const queryBlogSearchRecord = defineQuery(`
+  *[_type == "blog" && _id == $id][0]{
+    ${searchRecordProjection}
+  }
+`);
+
+/** Every post that belongs in the index, for the backfill. */
+export const queryBlogSearchRecords = defineQuery(`
+  *[_type == "blog" && defined(slug.current) && seoHideFromLists != true && seoNoIndex != true]{
+    ${searchRecordProjection}
+  }
+`);
+
 export const queryBlogSlugPageData = defineQuery(`
   *[_type == "blog" && slug.current == $slug][0]{
     ...,
