@@ -18,6 +18,16 @@ const env = createEnv({
     // FAQ ask box; `/api/ask` returns 503 until both are set.
     SANITY_CONTEXT_ENDPOINT: z.url().optional(),
     SANITY_CONTEXT_TOKEN: z.string().min(1).optional(),
+    // Algolia search index. All optional so a deployment without search still
+    // boots; `/api/blog/search` answers 503 and the sync/backfill routes 401
+    // until they are set. The admin key is server-only and never NEXT_PUBLIC_.
+    ALGOLIA_APP_ID: z.string().min(1).optional(),
+    ALGOLIA_ADMIN_API_KEY: z.string().min(1).optional(),
+    ALGOLIA_SEARCH_API_KEY: z.string().min(1).optional(),
+    ALGOLIA_INDEX_NAME: z.string().min(1).optional(),
+    // Shared secret for the Sanity -> Algolia webhook (`/api/algolia/sync`)
+    // and the backfill route. Both fail closed when unset.
+    SANITY_WEBHOOK_SECRET: z.string().min(1).optional(),
   },
 
   experimental__runtimeEnv: {

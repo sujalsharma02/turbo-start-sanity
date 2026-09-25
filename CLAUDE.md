@@ -137,6 +137,7 @@ Canonical source of truth is `apps/web/.env.example` and `apps/studio/.env.examp
 - Required: `NEXT_PUBLIC_SANITY_PROJECT_ID`, `NEXT_PUBLIC_SANITY_DATASET`, `NEXT_PUBLIC_SANITY_STUDIO_URL`, `SANITY_API_READ_TOKEN`, `SANITY_API_WRITE_TOKEN`
 - Optional: `NEXT_PUBLIC_SANITY_API_VERSION` (blank or unset falls back to `DEFAULT_SANITY_API_VERSION` from `@workspace/env/constants`, which uses the current UTC date at runtime), `SANITY_REVALIDATE_SECRET` (shared secret for the `/api/revalidate-sync-tags` webhook; the route fails closed when unset), and `SANITY_CONTEXT_ENDPOINT`, `SANITY_CONTEXT_TOKEN` for the FAQ block's ask row (`/api/ask` returns 503 until both are set). The ask row calls Claude through Vercel AI Gateway, which authenticates with `AI_GATEWAY_API_KEY` or, on Vercel and after `vercel env pull`, the project's `VERCEL_OIDC_TOKEN`
 - `NEXT_PUBLIC_VERCEL_ENV`, `NEXT_PUBLIC_VERCEL_URL`, `NEXT_PUBLIC_VERCEL_PROJECT_PRODUCTION_URL` are also validated but default to localhost, so they need no local value
+- Optional, Algolia blog search: `ALGOLIA_APP_ID`, `ALGOLIA_ADMIN_API_KEY` (server-only; webhook + backfill), `ALGOLIA_SEARCH_API_KEY`, `ALGOLIA_INDEX_NAME`, and `SANITY_WEBHOOK_SECRET` (Sanity → Algolia webhook and backfill; both routes fail closed when unset; `/api/blog/search` answers 503)
 
 Caveat: `SANITY_API_WRITE_TOKEN` is currently required by `packages/env/src/server.ts` even though no runtime code reads it. `apps/web/next.config.ts` imports `@workspace/env/server`, so `next dev` and `next build` both fail fast if it is unset.
 
@@ -145,6 +146,7 @@ Caveat: `SANITY_API_WRITE_TOKEN` is currently required by `packages/env/src/serv
 - Required: `SANITY_STUDIO_PROJECT_ID`, `SANITY_STUDIO_DATASET`
 - Optional: `SANITY_STUDIO_TITLE`, `SANITY_STUDIO_API_VERSION` (defaults to `DEFAULT_SANITY_API_VERSION` from `@workspace/env/constants`, which uses the current UTC date at runtime, in `apps/studio/utils/constant.ts`), `SANITY_STUDIO_APP_ID` (written back after the first `sanity deploy`), `SANITY_STUDIO_PRESENTATION_URL` (required whenever `NODE_ENV` is not `development` — `utils/helper.ts` returns `http://localhost:3000` in development and throws otherwise, so an unset or `test` `NODE_ENV` throws too)
 - `NEXT_PUBLIC_SITE_URL` and `SANITY_REVALIDATE_SECRET` are read only by the deployed Sanity Function `apps/studio/functions/invalidate-tags`, not by the Studio itself
+- Optional: `SANITY_STUDIO_ALGOLIA_APP_ID`, `SANITY_STUDIO_ALGOLIA_SEARCH_KEY`, `SANITY_STUDIO_ALGOLIA_INDEX` for the blog "SEO & Index" tab. Bundled into the browser by Vite, so search-only key only
 
 Web env vars are Zod-validated at startup via `@workspace/env` (`@workspace/env/client` and `@workspace/env/server`).
 
