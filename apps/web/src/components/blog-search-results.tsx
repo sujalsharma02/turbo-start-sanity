@@ -5,6 +5,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { BlogList } from "@/components/blog-list";
+import { BlogPagination } from "@/components/blog-pagination";
 import type { Blog } from "@/types";
 
 type BlogSearchResultsProps = Readonly<{
@@ -12,6 +13,9 @@ type BlogSearchResultsProps = Readonly<{
   results: Blog[];
   /** Total matches across all pages, not just the ones on this page. */
   nbHits: number;
+  nbPages: number;
+  /** Active category, carried into the page links. */
+  category?: string;
   isSearching: boolean;
   hasQuery: boolean;
   searchQuery: string;
@@ -110,6 +114,8 @@ export function BlogSearchResults({
   className,
   results,
   nbHits,
+  nbPages,
+  category,
   isSearching,
   hasQuery,
   searchQuery,
@@ -146,6 +152,19 @@ export function BlogSearchResults({
     <section className={cn("mt-8 grid gap-6", className)}>
       <SearchResultsHeader count={nbHits} query={searchQuery} />
       <BlogList blogs={results} />
+      {/* Live results are always page 1; further pages are server-rendered
+          links, the same ones a browser without JavaScript uses. */}
+      {nbPages > 1 && (
+        <BlogPagination
+          category={category}
+          className="mt-6"
+          currentPage={1}
+          hasNextPage
+          hasPreviousPage={false}
+          q={searchQuery.trim()}
+          totalPages={nbPages}
+        />
+      )}
     </section>
   );
 }

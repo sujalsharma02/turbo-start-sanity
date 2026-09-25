@@ -2,7 +2,7 @@
 
 import { cn } from "@workspace/tailwind-config/utils";
 import { useRouter } from "next/navigation";
-import type { ReactNode } from "react";
+import { type FormEvent, type ReactNode, useEffect } from "react";
 
 import { SearchInput } from "@/components/blog-search";
 import { BlogSearchResults } from "@/components/blog-search-results";
@@ -31,6 +31,7 @@ export function BlogSearchLayout({
     setSearchQuery,
     results,
     nbHits,
+    nbPages,
     isSearching,
     hasQuery,
     error,
@@ -41,14 +42,37 @@ export function BlogSearchLayout({
   // HTML a browser without JavaScript received. Pages and categories are links.
   const isLive = hasQuery && debouncedQuery.trim() !== initialQuery;
 
+  const listHref = activeCategory
+    ? `/blog?category=${activeCategory}`
+    : "/blog";
+
+  // Keep the URL shareable without leaving the page: a navigation would repaint
+  // the static shell (empty box, full list) before the results stream back in.
+  const syncUrl = (q: string) => {
+    const params = new URLSearchParams();
+    if (q) params.set("q", q);
+    if (activeCategory) params.set("category", activeCategory);
+    const search = params.toString();
+    window.history.replaceState(null, "", search ? `/blog?${search}` : "/blog");
+  };
+
+  const submit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    syncUrl(searchQuery.trim());
+  };
+
   const clear = () => {
     setSearchQuery("");
-    if (initialQuery) {
-      router.push(
-        activeCategory ? `/blog?category=${activeCategory}` : "/blog"
-      );
-    }
+    syncUrl("");
   };
+
+  // `list` is the server's answer for `initialQuery`; once the box is emptied
+  // it no longer describes the page, so load the plain list from the server.
+  useEffect(() => {
+    if (initialQuery && !hasQuery) {
+      router.replace(listHref);
+    }
+  }, [initialQuery, hasQuery, router, listHref]);
 
   const isDeadEnd =
     isLive && !isSearching && (Boolean(error) || results.length === 0);
@@ -86,6 +110,7 @@ export function BlogSearchLayout({
               className="max-w-none"
               onChange={setSearchQuery}
               onClear={clear}
+              onSubmit={submit}
               placeholder="Search…"
               value={searchQuery}
             />
@@ -102,10 +127,12 @@ export function BlogSearchLayout({
           <output className="sr-only">{searchStatus}</output>
           {isLive ? (
             <BlogSearchResults
+              category={activeCategory}
               error={error}
               hasQuery={hasQuery}
               isSearching={isSearching}
               nbHits={nbHits}
+              nbPages={nbPages}
               onClear={clear}
               results={results}
               searchQuery={searchQuery}

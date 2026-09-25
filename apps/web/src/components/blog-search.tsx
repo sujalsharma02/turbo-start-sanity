@@ -3,7 +3,7 @@
 import { cn } from "@workspace/tailwind-config/utils";
 import { Input } from "@workspace/ui/components/input";
 import { Search, X } from "lucide-react";
-import Form from "next/form";
+import type { FormEventHandler } from "react";
 
 export function SearchInput({
   className,
@@ -12,6 +12,7 @@ export function SearchInput({
   category,
   onChange,
   onClear,
+  onSubmit,
 }: {
   className?: string;
   placeholder: string;
@@ -20,14 +21,22 @@ export function SearchInput({
   category?: string;
   onChange: (value: string) => void;
   onClear: () => void;
+  /** With JavaScript, the caller keeps the page and only updates the URL. */
+  onSubmit?: FormEventHandler<HTMLFormElement>;
 }) {
   return (
     <div className={cn("w-full max-w-sm", className)}>
-      {/* A real GET form: Enter navigates to /blog?q=… whether or not
-          JavaScript runs, and the server renders the results. With JS,
-          next/form makes that a client navigation and the hook still
-          fetches as you type. */}
-      <Form action="/blog" className="relative" role="search">
+      {/* A real GET form: without JavaScript, Enter navigates to /blog?q=…
+          and the server renders the results. With JavaScript the results are
+          already live, so `onSubmit` cancels the navigation and only writes
+          the query into the URL. */}
+      <form
+        action="/blog"
+        className="relative"
+        method="get"
+        onSubmit={onSubmit}
+        role="search"
+      >
         <label className="sr-only" htmlFor="blog-search-input">
           {placeholder}
         </label>
@@ -62,7 +71,7 @@ export function SearchInput({
             <X className="size-4" />
           </button>
         )}
-      </Form>
+      </form>
     </div>
   );
 }
