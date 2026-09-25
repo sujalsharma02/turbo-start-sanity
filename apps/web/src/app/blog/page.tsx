@@ -3,7 +3,6 @@ import { getDynamicFetchOptions } from "@workspace/sanity/live";
 import type { Metadata } from "next";
 import { headers } from "next/headers";
 import { notFound } from "next/navigation";
-import { Suspense } from "react";
 
 import {
   BlogPageContent,
@@ -27,6 +26,14 @@ import { seoFromDocument } from "@/lib/seo";
 import { calculateBlogPaginationMetadata } from "@/utils";
 
 const logger = new Logger("BlogIndex");
+
+// No static shell for this route. The blog index is driven by ?q=, ?page= and
+// ?category=, and a prerendered shell would be the page-1 list behind a
+// Suspense fallback that React only swaps out with JavaScript. Search,
+// pagination and the category filter have to work with JavaScript off, so the
+// page blocks on its (cached) data and sends one complete document instead.
+// `instant = false` opts the segment out of the static-shell validation.
+export const instant = false;
 
 type BlogPageProps = Readonly<{
   searchParams: Promise<{
@@ -105,34 +112,7 @@ export async function generateMetadata({
 }
 
 export default function BlogIndexPage({ searchParams }: BlogPageProps) {
-  // Deliberately unkeyed: a key would remount the boundary and repaint the
-  // fallback on every pagination click; unkeyed, the previous posts stay on
-  // screen until the new page resolves, so the fallback only paints on a
-  // fresh load.
-  return (
-    <Suspense fallback={<BlogIndexShell />}>
-      <BlogIndexView searchParams={searchParams} />
-    </Suspense>
-  );
-}
-
-/**
- * The static shell: real published page-1 content, no loading state. A deep
- * link like `?page=2` shows page 1 until the right page resolves.
- */
-async function BlogIndexShell() {
-  const data = await fetchBlogIndexPage({
-    currentPage: 1,
-    category: "",
-    perspective: "published",
-    stega: false,
-  });
-
-  if (!data) {
-    return null;
-  }
-
-  return <BlogIndexBody activeCategory="" currentPage={1} data={data} />;
+  return <BlogIndexView searchParams={searchParams} />;
 }
 
 async function BlogIndexView({ searchParams }: BlogPageProps) {
