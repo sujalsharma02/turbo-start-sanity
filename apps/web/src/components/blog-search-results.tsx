@@ -1,6 +1,7 @@
 "use client";
 
 import { cn } from "@workspace/tailwind-config/utils";
+import Link from "next/link";
 import type { ReactNode } from "react";
 
 import { BlogList } from "@/components/blog-list";
@@ -9,6 +10,8 @@ import type { Blog } from "@/types";
 type BlogSearchResultsProps = Readonly<{
   className?: string;
   results: Blog[];
+  /** Total matches across all pages, not just the ones on this page. */
+  nbHits: number;
   isSearching: boolean;
   hasQuery: boolean;
   searchQuery: string;
@@ -20,7 +23,7 @@ function Term({ children }: Readonly<{ children: string }>) {
   return <span className="text-foreground">“{children}”</span>;
 }
 
-function SearchResultsHeader({
+export function SearchResultsHeader({
   query,
   count,
 }: Readonly<{
@@ -43,7 +46,7 @@ function SearchResultsHeader({
 
 const STATE_TITLE = "font-medium text-foreground text-lg";
 
-function StateFrame({ children }: Readonly<{ children: ReactNode }>) {
+export function StateFrame({ children }: Readonly<{ children: ReactNode }>) {
   return (
     <div className="grid h-full place-content-center justify-items-center gap-8 py-16 text-center">
       {children}
@@ -54,12 +57,15 @@ function StateFrame({ children }: Readonly<{ children: ReactNode }>) {
 const ACTION_CLASS =
   "focus-ring inline-flex min-h-11 w-max shrink-0 items-center rounded-none border border-foreground px-3 font-mono text-foreground text-sm uppercase tracking-wide transition-colors hover:bg-foreground hover:text-background";
 
-function EmptySearchState({
+export function EmptySearchState({
   query,
   onClear,
+  clearHref,
 }: Readonly<{
   query: string;
   onClear?: () => void;
+  /** Server-rendered variant: a link works without JavaScript. */
+  clearHref?: string;
 }>) {
   return (
     <>
@@ -70,7 +76,11 @@ function EmptySearchState({
           adjusting your search terms.
         </p>
       </div>
-      {onClear ? (
+      {clearHref ? (
+        <Link className={ACTION_CLASS} href={clearHref}>
+          Clear search
+        </Link>
+      ) : onClear ? (
         <button className={ACTION_CLASS} onClick={onClear} type="button">
           Clear search
         </button>
@@ -79,7 +89,7 @@ function EmptySearchState({
   );
 }
 
-function ErrorState({ query }: Readonly<{ query: string }>) {
+export function ErrorState({ query }: Readonly<{ query: string }>) {
   return (
     <div className="grid gap-6">
       <SearchResultsHeader count={0} query={query} />
@@ -99,6 +109,7 @@ function LoadingState() {
 export function BlogSearchResults({
   className,
   results,
+  nbHits,
   isSearching,
   hasQuery,
   searchQuery,
@@ -133,7 +144,7 @@ export function BlogSearchResults({
 
   return (
     <section className={cn("mt-8 grid gap-6", className)}>
-      <SearchResultsHeader count={results.length} query={searchQuery} />
+      <SearchResultsHeader count={nbHits} query={searchQuery} />
       <BlogList blogs={results} />
     </section>
   );

@@ -6,7 +6,8 @@ import { BLOG_CATEGORIES } from "@/lib/blog-categories";
 export function BlogCategoryFilter({
   activeCategory,
   className,
-}: Readonly<{ activeCategory: string; className?: string }>) {
+  q,
+}: Readonly<{ activeCategory: string; className?: string; q?: string }>) {
   return (
     <nav
       aria-label="Filter posts by category"
@@ -14,7 +15,16 @@ export function BlogCategoryFilter({
     >
       {BLOG_CATEGORIES.map(({ label, value }) => {
         const isActive = activeCategory === value;
-        const href = value ? `/blog?category=${value}` : "/blog";
+        // Plain links: filtering works with JavaScript off, inside a search too.
+        const params = new URLSearchParams();
+        if (q) {
+          params.set("q", q);
+        }
+        if (value) {
+          params.set("category", value);
+        }
+        const query = params.toString();
+        const href = query ? `/blog?${query}` : "/blog";
 
         return (
           <Link

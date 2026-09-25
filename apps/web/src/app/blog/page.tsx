@@ -1,9 +1,14 @@
+import { Logger } from "@workspace/logger";
 import { getDynamicFetchOptions } from "@workspace/sanity/live";
 import type { Metadata } from "next";
+import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 
-import { BlogPageContent } from "@/components/blog-page-content";
+import {
+  BlogPageContent,
+  type BlogSearchPage,
+} from "@/components/blog-page-content";
 import { PageBuilderJsonLd } from "@/components/page-builder-json-ld";
 import { PageBuilder } from "@/components/pagebuilder";
 import {
@@ -11,20 +16,49 @@ import {
   fetchBlogIndexPage,
   parseBlogPageParam,
 } from "@/lib/blog-index";
+import {
+  isSearchRateLimited,
+  parseSearchParams,
+  type SearchInput,
+  searchBlogs,
+} from "@/lib/algolia";
+import { clientIp } from "@/lib/rate-limit";
 import { seoFromDocument } from "@/lib/seo";
 import { calculateBlogPaginationMetadata } from "@/utils";
+
+const logger = new Logger("BlogIndex");
 
 type BlogPageProps = Readonly<{
   searchParams: Promise<{
     page?: string;
     category?: string;
+    q?: string;
   }>;
 }>;
+
+/**
+ * The server-side half of search, so `/blog?q=` renders results without
+ * JavaScript. Deliberately not cached (see lib/algolia.ts) and rate limited
+ * like the JSON route; failures become a state the page renders, not a 500.
+ */
+async function runSearch(input: SearchInput): Promise<BlogSearchPage> {
+  const empty = { q: input.q, hits: [], nbHits: 0, nbPages: 0 };
+  if (isSearchRateLimited(clientIp(await headers()))) {
+    return { ...empty, error: "limited" };
+  }
+  try {
+    const { hits, nbHits, nbPages } = await searchBlogs(input);
+    return { q: input.q, hits, nbHits, nbPages };
+  } catch (error) {
+    logger.error("Search failed", error);
+    return { ...empty, error: "unavailable" };
+  }
+}
 
 export async function generateMetadata({
   searchParams,
 }: BlogPageProps): Promise<Metadata> {
-  const [{ page, category }, { perspective }] = await Promise.all([
+  const [{ page, category, q }, { perspective }] = await Promise.all([
     searchParams,
     getDynamicFetchOptions(),
   ]);
@@ -42,6 +76,17 @@ export async function generateMetadata({
   // No index document is a 404, matching the view's behavior.
   if (!data) {
     notFound();
+  }
+
+  // Search result pages: the page count is Algolia's, not Sanity's, so the
+  // range check below doesn't apply, and internal search results are noindex
+  // so they never compete with the blog index in search engines.
+  const query = q?.trim();
+  if (query) {
+    return seoFromDocument(
+      { ...data, seoTitle: `Search: ${query}`, seoNoIndex: true },
+      { slug: "/blog" }
+    );
   }
 
   // 404 out-of-range pages here, not in the view: metadata resolves before the
@@ -91,7 +136,7 @@ async function BlogIndexShell() {
 }
 
 async function BlogIndexView({ searchParams }: BlogPageProps) {
-  const [{ page, category }, { perspective, stega }] = await Promise.all([
+  const [{ page, category, q }, { perspective, stega }] = await Promise.all([
     searchParams,
     getDynamicFetchOptions(),
   ]);
@@ -111,14 +156,32 @@ async function BlogIndexView({ searchParams }: BlogPageProps) {
     notFound();
   }
 
-  // Past the last page is a dead URL, not an empty list — the real 404 status
-  // was already sent by `generateMetadata`; this keeps the body consistent.
-  const { totalPages } = calculateBlogPaginationMetadata(
-    data.total,
-    currentPage
-  );
-  if (currentPage > totalPages) {
-    notFound();
+  let search: BlogSearchPage | undefined;
+  const query = q?.trim();
+  if (query) {
+    // An over-long query or a junk page/category is a bogus URL, like ?page=0.
+    const input = parseSearchParams({
+      q: query,
+      page,
+      category: activeCategory,
+    });
+    if (!input) {
+      notFound();
+    }
+    search = await runSearch(input);
+    if (search.nbPages > 0 && currentPage > search.nbPages) {
+      notFound();
+    }
+  } else {
+    // Past the last page is a dead URL, not an empty list — the real 404 status
+    // was already sent by `generateMetadata`; this keeps the body consistent.
+    const { totalPages } = calculateBlogPaginationMetadata(
+      data.total,
+      currentPage
+    );
+    if (currentPage > totalPages) {
+      notFound();
+    }
   }
 
   return (
@@ -126,6 +189,7 @@ async function BlogIndexView({ searchParams }: BlogPageProps) {
       activeCategory={activeCategory}
       currentPage={currentPage}
       data={data}
+      search={search}
     />
   );
 }
@@ -134,13 +198,15 @@ function BlogIndexBody({
   data,
   activeCategory,
   currentPage,
+  search,
 }: Readonly<{
   data: BlogIndexPageData;
   activeCategory: string;
   currentPage: number;
+  search?: BlogSearchPage;
 }>) {
   const paginationMetadata = calculateBlogPaginationMetadata(
-    data.total,
+    search ? search.nbHits : data.total,
     currentPage
   );
 
@@ -153,6 +219,7 @@ function BlogIndexBody({
         featuredBlogs={data.featuredBlogs}
         indexPageData={data}
         paginationMetadata={paginationMetadata}
+        search={search}
       >
         {data.pageBuilder && data.pageBuilder.length > 0 ? (
           <div className="pb-16">

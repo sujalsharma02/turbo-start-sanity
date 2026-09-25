@@ -12,6 +12,8 @@ export type PaginationProps = {
 type BlogPaginationProps = PaginationProps & {
   className?: string;
   category?: string;
+  /** Active search query; kept in every page link so paging stays in the search. */
+  q?: string;
 };
 
 type PaginationItem = number | "ellipsis-start" | "ellipsis-end";
@@ -63,11 +65,15 @@ export function BlogPagination({
   basePath = "/blog",
   className,
   category,
+  q,
 }: BlogPaginationProps) {
   const paginationItems = generatePaginationItems(currentPage, totalPages);
 
   const getPageUrl = (page: number): string => {
     const params = new URLSearchParams();
+    if (q) {
+      params.set("q", q);
+    }
     if (category) {
       params.set("category", category);
     }
