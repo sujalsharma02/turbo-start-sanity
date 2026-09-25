@@ -68,8 +68,12 @@ function renderBlockComponent(
       );
     case "subscribeNewsletter":
       return (
+        // A plain form target, so the signup works with JavaScript off. The
+        // route answers a form post with a redirect back to this page.
         <SubscribeNewsletter
           {...(block as PagebuilderType<"subscribeNewsletter">)}
+          action="/api/newsletter"
+          method="post"
         />
       );
     case "logoCloud":
