@@ -35,7 +35,6 @@ export function SearchInput({
         className="relative"
         method="get"
         onSubmit={onSubmit}
-        role="search"
       >
         <label className="sr-only" htmlFor="blog-search-input">
           {placeholder}
