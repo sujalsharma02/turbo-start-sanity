@@ -1,46 +1,48 @@
+import { Logger } from "@workspace/logger";
+import { type NextRequest, NextResponse } from "next/server";
+
 import {
-  type DynamicFetchOptions,
-  getDynamicFetchOptions,
-  sanityFetch,
-} from "@workspace/sanity/live";
-import { queryAllBlogDataForSearch } from "@workspace/sanity/query";
-import Fuse from "fuse.js";
-import { NextResponse } from "next/server";
+  isSearchConfigured,
+  isSearchRateLimited,
+  parseSearchParams,
+  searchBlogs,
+} from "@/lib/algolia";
+import { clientIp } from "@/lib/rate-limit";
 
-async function getSearchableBlogs(
-  perspective: DynamicFetchOptions["perspective"]
-) {
-  "use cache";
-  const { data } = await sanityFetch({
-    query: queryAllBlogDataForSearch,
-    perspective,
-    stega: false,
-  });
-  return data;
-}
+const logger = new Logger("BlogSearch");
 
-export async function GET(request: Request) {
-  const { searchParams } = new URL(request.url);
-  const query = searchParams.get("q");
-
-  if (!query) {
-    return NextResponse.json({ error: "Query is required" }, { status: 400 });
+/**
+ * JSON search for the as-you-type hook. The same `searchBlogs` serves the
+ * server-rendered `/blog?q=` page, which is what a browser without JavaScript
+ * uses. Response: `{ hits, nbHits, page, nbPages }`, pages 1-based like `/blog`.
+ */
+export async function GET(req: NextRequest) {
+  if (isSearchRateLimited(clientIp(req.headers))) {
+    return NextResponse.json({ error: "Too many requests" }, { status: 429 });
   }
 
-  const { perspective } = await getDynamicFetchOptions();
-  const data = await getSearchableBlogs(perspective);
-
-  if (!data) {
-    return NextResponse.json({ error: "No data found" }, { status: 404 });
+  const { searchParams } = req.nextUrl;
+  const input = parseSearchParams({
+    q: searchParams.get("q"),
+    page: searchParams.get("page"),
+    category: searchParams.get("category"),
+  });
+  if (!input) {
+    return NextResponse.json(
+      { error: "Invalid search parameters" },
+      { status: 400 }
+    );
+  }
+  if (!isSearchConfigured) {
+    return NextResponse.json({ error: "Search unavailable" }, { status: 503 });
   }
 
-  const fuse = new Fuse(data, {
-    keys: ["title", "description", "slug", "authors.name"],
-    threshold: 0.3,
-  });
-
-  const results = fuse.search(query, {
-    limit: 10,
-  });
-  return NextResponse.json(results.map((result) => result.item));
+  try {
+    return NextResponse.json(await searchBlogs(input));
+  } catch (error) {
+    // Algolia down or slow: a generic 503, and the UI shows its failed state.
+    // No fallback to a Sanity full scan; that is the cost this route replaced.
+    logger.error("Search failed", error);
+    return NextResponse.json({ error: "Search unavailable" }, { status: 503 });
+  }
 }
