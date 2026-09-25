@@ -1,20 +1,14 @@
-import { timingSafeEqual } from "node:crypto";
 import { env } from "@workspace/env/server";
 import { Logger } from "@workspace/logger";
 import { revalidateTag } from "next/cache";
 import { type NextRequest, NextResponse } from "next/server";
 
+import { secretsMatch } from "@/lib/secrets";
+
 const logger = new Logger("RevalidateSyncTags");
 
 // Cap the tag count so a caller can't force an unbounded revalidate loop.
 const MAX_TAGS = 1000;
-
-// Constant-time secret comparison; length-guarded so buffers match.
-function secretsMatch(provided: string, expected: string): boolean {
-  const a = Buffer.from(provided);
-  const b = Buffer.from(expected);
-  return a.length === b.length && timingSafeEqual(a, b);
-}
 
 export async function POST(req: NextRequest) {
   const expected = env.SANITY_REVALIDATE_SECRET;

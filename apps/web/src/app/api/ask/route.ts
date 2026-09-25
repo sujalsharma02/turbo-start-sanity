@@ -4,6 +4,8 @@ import { Logger } from "@workspace/logger";
 import { isStepCount, streamText } from "ai";
 import type { NextRequest } from "next/server";
 
+import { clientIp, createRateLimiter } from "@/lib/rate-limit";
+
 const logger = new Logger("AskRoute");
 
 const MAX_QUESTION_LENGTH = 500;
@@ -15,8 +17,10 @@ const CUT_OFF_NOTE = "\n\n(The answer was cut off. Please try again.)";
 const UNAVAILABLE_MESSAGE =
   "The assistant is temporarily unavailable. Please try again later.";
 
-// Per server instance only; use a Vercel Firewall rule for a global limit.
-const recentRequests = new Map<string, number[]>();
+const isRateLimited = createRateLimiter({
+  limit: REQUESTS_PER_MINUTE,
+  windowMs: WINDOW_MS,
+});
 
 const SYSTEM_PROMPT = `You answer visitor questions in the FAQ section of the Turbo Start Sanity website.
 Use the knowledge base tools for every answer: call initial_context, then knowledge_base_read on the entries that fit the question.
@@ -27,20 +31,6 @@ Keep answers short: a few sentences, in plain text with no Markdown.`;
 interface AskConfig {
   endpoint: string;
   token: string;
-}
-
-function isRateLimited(ip: string) {
-  const now = Date.now();
-  for (const [key, times] of recentRequests) {
-    if (now - (times.at(-1) ?? 0) >= WINDOW_MS) recentRequests.delete(key);
-  }
-  const recent = (recentRequests.get(ip) ?? []).filter(
-    (time) => now - time < WINDOW_MS
-  );
-  const limited = recent.length >= REQUESTS_PER_MINUTE;
-  if (!limited) recent.push(now);
-  recentRequests.set(ip, recent);
-  return limited;
 }
 
 async function readQuestion(req: NextRequest): Promise<string> {
@@ -119,9 +109,7 @@ export async function POST(req: NextRequest) {
     });
   }
 
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim() || "local";
-  if (isRateLimited(ip)) {
+  if (isRateLimited(clientIp(req.headers))) {
     return Response.json(
       {
         error:
