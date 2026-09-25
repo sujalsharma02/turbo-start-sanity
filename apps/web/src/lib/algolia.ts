@@ -8,6 +8,7 @@ import type { QueryBlogSearchRecordResult } from "@workspace/sanity/types";
 import { BLOG_CATEGORY_OPTIONS } from "@workspace/sanity-blocks/internal/blog-categories";
 import { algoliasearch, type IndexSettings } from "algoliasearch";
 
+import { createRateLimiter } from "@/lib/rate-limit";
 import type { Blog } from "@/types";
 import { BLOG_LIST_PAGE_SIZE } from "@/utils";
 
@@ -15,6 +16,15 @@ import { BLOG_LIST_PAGE_SIZE } from "@/utils";
 // bytes anyway; 100 characters is plenty for a blog search. `page` is capped
 // the same way `lib/blog-index.ts` caps the blog index.
 export const SEARCH_LIMITS = { maxQueryLength: 100, maxPage: 100 } as const;
+
+// Every search is a billed Algolia operation and both entry points are public;
+// a cache alone doesn't stop a loop of distinct queries. 30 a minute per IP
+// allows typing through the hook's 400 ms debounce and blocks scripts. Shared
+// by the JSON route and the server-rendered /blog?q= page.
+export const isSearchRateLimited = createRateLimiter({
+  limit: 30,
+  windowMs: 60_000,
+});
 
 const SANITY_TIMEOUT_MS = 5_000;
 const ALGOLIA_TIMEOUTS = { connect: 2_000, read: 5_000, write: 30_000 };
@@ -143,6 +153,13 @@ export async function searchBlogs({
 
 export type SyncAction = "upsert" | "delete" | "retry";
 
+// Nothing below waits for an Algolia task to finish. Algolia applies an index's
+// tasks strictly in the order it accepted them (rising taskIDs), so once a call
+// returns the outcome is decided; and a settings change queues a reindex that
+// measured at over three minutes on the free plan, which every later task waits
+// behind. Blocking here would time out webhooks and the backfill for nothing.
+// Callers get the taskID back and can poll /1/indexes/{index}/task/{taskID}.
+
 /**
  * Converge one document. The webhook body is only trusted for the id; the
  * document is re-read from Sanity so publish, edit, unpublish, delete, hide and
@@ -168,33 +185,49 @@ export async function syncBlog(
       indexName,
       body: toRecord(doc),
     });
-    await admin.waitForTask({ indexName, taskID });
     return { action: "upsert", taskID };
   }
   const { taskID } = await admin.deleteObject({ indexName, objectID: id });
-  await admin.waitForTask({ indexName, taskID });
   return { action: "delete", taskID };
 }
 
+const SETTINGS_KEYS = Object.keys(
+  INDEX_SETTINGS
+) as (keyof typeof INDEX_SETTINGS)[];
+
 /**
- * Settings, then every indexable published post as an upsert. Safe to run
- * twice: same objectIDs, same records. Not atomic against the webhook: a
- * publish between the fetch below and saveObjects can be overwritten by this
- * older snapshot until its next publish; Algolia applies writes in arrival
- * order (rising taskIDs). replaceAllObjects would widen that window to the
- * whole run, so per-object upserts are used instead.
+ * Settings (only when they differ from what the index already has), then every
+ * indexable published post as an upsert. Safe to run twice: same objectIDs,
+ * same records, and an unchanged settings call is skipped rather than queueing
+ * another reindex. Not atomic against the webhook: a publish between the fetch
+ * below and saveObjects can be overwritten by this older snapshot until its
+ * next publish; Algolia applies writes in arrival order. replaceAllObjects
+ * would widen that window to the whole run, so per-object upserts are used.
  */
 // ponytail: in-request backfill; move to a queue/script if the corpus outgrows the function timeout
 export async function backfill(): Promise<{
   indexed: number;
+  settingsTaskID: number | null;
   taskIDs: number[];
 }> {
   if (!(admin && indexName)) throw new Error("Algolia admin not configured");
-  const settings = await admin.setSettings({
-    indexName,
-    indexSettings: INDEX_SETTINGS,
-  });
-  await admin.waitForTask({ indexName, taskID: settings.taskID });
+
+  let settingsTaskID: number | null = null;
+  // A brand-new index 404s on getSettings; treat that as "nothing set yet".
+  const current: Partial<IndexSettings> = await admin
+    .getSettings({ indexName })
+    .catch(() => ({}));
+  const unchanged = SETTINGS_KEYS.every(
+    (key) =>
+      JSON.stringify(current[key]) === JSON.stringify(INDEX_SETTINGS[key])
+  );
+  if (!unchanged) {
+    const res = await admin.setSettings({
+      indexName,
+      indexSettings: INDEX_SETTINGS,
+    });
+    settingsTaskID = res.taskID;
+  }
 
   const docs = await sanity.fetch(queryBlogSearchRecords);
   const responses = await admin.saveObjects({
@@ -202,9 +235,9 @@ export async function backfill(): Promise<{
     objects: docs.map(toRecord),
     batchSize: 1000,
   });
-  const taskIDs = responses.map((r) => r.taskID);
-  await Promise.all(
-    taskIDs.map((taskID) => admin.waitForTask({ indexName, taskID }))
-  );
-  return { indexed: docs.length, taskIDs };
+  return {
+    indexed: docs.length,
+    settingsTaskID,
+    taskIDs: responses.map((r) => r.taskID),
+  };
 }
