@@ -56,9 +56,10 @@ PASS 1 publish -> in index: record {"title":"Webhook verification post","categor
 --- 2 edit searchable field ---
 PASS 2 edit -> record updated: record {"title":"Webhook verification post (edited)","category":"seo"} after 4s
 ```
-
+![Algolia Search](image.png) ![Javascript OFF](image-1.png)
 ## 2. Unpublishing or deleting removes it
-
+![CMD ran to check ](image-2.png)
+![Post no more shows up](image-3.png)
 ```
 --- 3 seoHideFromLists = true ---
 PASS 3 hidden -> removed: record absent after 4s
