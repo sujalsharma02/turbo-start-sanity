@@ -2,6 +2,7 @@
 
 Production site: https://turbo-start-sanity-web-swart.vercel.app
 Deployed Studio: https://turbo-start-sanity-studio-olive.vercel.app
+Sanity-hosted Studio (`npx sanity deploy`): https://turbo-start-sanity-sujal.sanity.studio
 Sanity project: `tzzuuieg`, dataset `production`. Algolia index: `blog_posts`.
 
 All output below is pasted from real runs against the deployed site on 2026-09-25 and
