@@ -41,6 +41,12 @@ peerDependencyRules:
     "@csstools/css-syntax-patches-for-csstree>css-tree": ">=3"
 
 overrides:
+  # @sanity/codegen 8.1.0 rebuilt configDefinition with valibot, but @sanity/cli
+  # 8.3.0 still calls configDefinition.parse() (a zod method) in its typegen
+  # plugin, so `sanity dev` dies with "configDefinition.parse is not a function"
+  # whenever the CLI resolves 8.1.0. Pin the CLI to 8.0.0; apps/web keeps ^8.1.0
+  # for its type helpers only.
+  "@sanity/cli>@sanity/codegen": 8.0.0
   "@codemirror/state": ^6.7.4
   undici@<6.24.0: ^6.28.1
   minimatch@<3.1.4: ^3.1.5
