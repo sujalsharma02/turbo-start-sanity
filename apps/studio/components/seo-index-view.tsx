@@ -161,7 +161,7 @@ function compare(
         }
       : {
           tone: "default",
-          text: "Not published, so not in the search index. Expected.",
+          text: "Post is unpublished, so it is not expected to appear in search.",
         };
   }
   if (shouldBeIndexed && !record) {
