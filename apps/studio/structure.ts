@@ -15,11 +15,13 @@ import {
   User,
 } from "lucide-react";
 import type {
+  DefaultDocumentNodeResolver,
   StructureBuilder,
   StructureResolverContext,
 } from "sanity/structure";
 
 import { createSlugBasedStructure } from "@/components/nested-pages-structure";
+import { SeoIndexView } from "@/components/seo-index-view";
 import type { SchemaType, SingletonType } from "@/schemaTypes/index";
 import { getTitleCase } from "@/utils/helper";
 
@@ -96,6 +98,23 @@ const createIndexListWithOrderableItems = ({
         ])
     );
 };
+
+/**
+ * Views for a document opened from any list. Blog posts get a second,
+ * read-only "SEO & Index" tab beside the editor; every other type keeps the
+ * form alone. The blogIndex singleton declares its own views above and is
+ * not affected.
+ */
+export const defaultDocumentNode: DefaultDocumentNodeResolver = (
+  S,
+  { schemaType }
+) =>
+  schemaType === "blog"
+    ? S.document().views([
+        S.view.form(),
+        S.view.component(SeoIndexView).title("SEO & Index"),
+      ])
+    : S.document().views([S.view.form()]);
 
 export const structure = (
   S: StructureBuilder,

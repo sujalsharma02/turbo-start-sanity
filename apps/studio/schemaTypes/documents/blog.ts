@@ -7,7 +7,12 @@ import { FileText } from "lucide-react";
 import { defineArrayMember, defineField, defineType } from "sanity";
 
 import { documentSlugField, imageWithAltField } from "@/schemaTypes/common";
-import { GROUP, GROUPS } from "@/utils/constant";
+import {
+  GROUP,
+  GROUPS,
+  SEO_DESCRIPTION_MAX,
+  SEO_DESCRIPTION_MIN,
+} from "@/utils/constant";
 import { ogFields } from "@/utils/og-fields";
 import { seoFields } from "@/utils/seo-fields";
 
@@ -40,14 +45,14 @@ export const blog = defineType({
       group: GROUP.MAIN_CONTENT,
       validation: (rule) => [
         rule
-          .min(140)
+          .min(SEO_DESCRIPTION_MIN)
           .warning(
-            "The meta description should be at least 140 characters for optimal SEO visibility in search results"
+            `The meta description should be at least ${SEO_DESCRIPTION_MIN} characters for optimal SEO visibility in search results`
           ),
         rule
-          .max(160)
+          .max(SEO_DESCRIPTION_MAX)
           .warning(
-            "The meta description should not exceed 160 characters as it will be truncated in search results"
+            `The meta description should not exceed ${SEO_DESCRIPTION_MAX} characters as it will be truncated in search results`
           ),
       ],
     }),

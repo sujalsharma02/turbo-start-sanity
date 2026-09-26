@@ -27,3 +27,8 @@ export const GROUPS: FieldGroupDefinition[] = [
 
 export const API_VERSION =
   process.env.SANITY_STUDIO_API_VERSION || DEFAULT_SANITY_API_VERSION;
+
+// Meta description bounds. The blog schema warns outside this range and the
+// "SEO & Index" tab reports against the same numbers, so they live in one place.
+export const SEO_DESCRIPTION_MIN = 140;
+export const SEO_DESCRIPTION_MAX = 160;
